@@ -1115,7 +1115,10 @@ function renderResumen(o){
         ${e.estado==='done'?'✓':e.estado==='active'?'▶':e.num}
       </div>
       <div class="etapa-label ${e.estado}">${e.nombre}</div>
-      ${e.fechaCompletada?`<div class="etapa-date">${e.fechaCompletada}</div>`:''}
+      <div style="text-align:right;">
+        ${e.fechaCompletada?`<div class="etapa-date">${e.fechaCompletada}</div><div style="font-size:9px;color:var(--g3);">${e.horaCompletada||''}</div>`:''}
+        ${e.estado==='active'&&e.fechaActivo?`<div class="etapa-date" style="color:var(--blue);">${e.fechaActivo}</div><div style="font-size:9px;color:var(--blue);opacity:.7;">${e.horaActivo||''}</div>`:''}
+      </div>
     </div>`).join("")||'<div style="font-size:12px;color:var(--g3);">Sin etapas</div>';
   const updates=(o.updates||[]).sort((a,b)=>b.ts-a.ts);
   const last=updates[0];
@@ -1520,7 +1523,7 @@ function mostrarVC(o){
       <div style="display:flex;align-items:center;gap:8px;margin-top:9px;flex-wrap:wrap;">
         <div style="display:inline-flex;align-items:center;background:rgba(30,111,217,.18);border:1px solid rgba(30,111,217,.3);color:#60A5FA;font-size:10px;font-weight:600;padding:3px 11px;border-radius:20px;">${o.servicio}</div>
         <span style="font-size:10px;color:rgba(255,255,255,.25);">${_fecha}</span>
-        ${o.ubicacion?`<span style="font-size:10px;color:rgba(255,255,255,.18);">${o.ubicacion}</span>`:""}
+        ${o.ubicacion?`<span style="font-size:10px;color:rgba(255,255,255,.18);">${o.ubicacion}, México</span>`:""}
       </div>
     </div>`;
 
@@ -1560,8 +1563,8 @@ function mostrarVC(o){
         ${e.estado==='active'?'<div style="font-size:9px;color:#60A5FA;font-weight:700;letter-spacing:.5px;margin-top:1px;">EN CURSO</div>':''}
       </div>
       <div style="text-align:right;flex-shrink:0;">
-        ${e.fechaCompletada?`<div style="font-size:10px;color:rgba(255,255,255,.3);">${e.fechaCompletada}</div><div style="font-size:9px;color:rgba(255,255,255,.18);">${e.horaCompletada||''}</div>`:''}
-        ${e.estado==='active'&&e.fechaActivo?`<div style="font-size:10px;color:#60A5FA;">${e.fechaActivo}</div><div style="font-size:9px;color:rgba(96,165,250,.6);">${e.horaActivo||''}</div>`:''}
+        ${e.fechaCompletada?`<div style="font-size:10px;color:rgba(255,255,255,.3);">${e.fechaCompletada}</div><div style="font-size:9px;color:rgba(255,255,255,.2);font-weight:600;">${e.horaCompletada||''}</div>`:''}
+        ${e.estado==='active'&&e.fechaActivo?`<div style="font-size:10px;color:#60A5FA;font-weight:600;">${e.fechaActivo}</div><div style="font-size:9px;color:rgba(96,165,250,.7);font-weight:600;">${e.horaActivo||''}</div>`:''}
         ${e.estado==='pendiente'?'<div style="font-size:9px;color:rgba(255,255,255,.15);">Pendiente</div>':''}
       </div>
     </div>`).join("");
