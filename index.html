@@ -381,7 +381,8 @@ html,body{height:100%;background:var(--off);color:var(--tx);font-family:var(--fo
   </div>
 
   <div id="subnav">
-    <div class="snav active" id="snav-obras" onclick="goScreen('obras')">Obras</div>
+    <div class="snav active" id="snav-dashboard" onclick="goScreen('dashboard')">Dashboard</div>
+    <div class="snav" id="snav-obras" onclick="goScreen('obras')">Obras</div>
     <div class="snav" id="snav-nueva" onclick="showNueva()">+ Nueva</div>
   </div>
 
@@ -649,9 +650,9 @@ html,body{height:100%;background:var(--off);color:var(--tx);font-family:var(--fo
   </div><!-- /main -->
 
   <nav id="navbar">
-    <button class="nb active" id="nb-obras" onclick="goScreen('obras')">
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="11" y="3" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="3" y="11" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="11" y="11" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/></svg>
-      Obras
+    <button class="nb" id="nb-dashboard" onclick="goScreen('dashboard')">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 10L10 3l7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M5 8.5V17h4v-4h2v4h4V8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Inicio
     </button>
     <div class="nb-fab-wrap">
       <button class="nb-fab" onclick="showNueva()">
@@ -726,6 +727,31 @@ html,body{height:100%;background:var(--off);color:var(--tx);font-family:var(--fo
       <button class="btn btn-secondary" style="flex:1;" onclick="closeModal('modal-change-pin')">Cancelar</button>
       <button class="btn btn-primary" style="flex:1;" onclick="cambiarPin()">Guardar PIN</button>
     </div>
+  </div>
+</div>
+
+<!-- MODAL CHECK-IN OBLIGATORIO -->
+<div class="moverlay" id="modal-checkin-obligatorio" style="z-index:350;">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div style="text-align:center;margin-bottom:16px;">
+      <div style="width:52px;height:52px;background:var(--blue-dim);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:26px;">📍</div>
+      <div style="font-size:17px;font-weight:700;color:var(--navy);letter-spacing:-.2px;">Check-in del día</div>
+      <div style="font-size:12px;color:var(--tx2);margin-top:4px;">Registra tu presencia antes de comenzar</div>
+    </div>
+    <div style="background:var(--blue-pale);border:1px solid rgba(30,111,217,.2);border-radius:8px;padding:10px 13px;font-size:11px;color:var(--blue);margin-bottom:14px;display:flex;align-items:center;gap:6px;">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="#1E6FD9" stroke-width="1.2"/><path d="M7 4v4M7 9.5v.5" stroke="#1E6FD9" stroke-width="1.2" stroke-linecap="round"/></svg>
+      Este registro queda vinculado a los updates que publiques hoy
+    </div>
+    <div class="fg"><label class="flabel">Tu nombre <span class="req">*</span></label>
+      <input class="finput" id="ci-ob-nombre" placeholder="Nombre completo"></div>
+    <div class="fg"><label class="flabel">Ubicación / Área de trabajo</label>
+      <input class="finput" id="ci-ob-ubic" placeholder="Nave, planta, ciudad..."></div>
+    <div style="background:var(--off);border-radius:8px;padding:10px 13px;display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <span style="font-size:11px;color:var(--tx2);">Hora de entrada</span>
+      <span id="ci-ob-hora" style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--navy);">—</span>
+    </div>
+    <button class="btn btn-primary btn-block" onclick="registrarCheckinObligatorio()">✓ Registrar y continuar</button>
   </div>
 </div>
 <!-- MODAL NUEVA OBRA -->
@@ -977,6 +1003,7 @@ function subscribeObras(){
     obras = snap.docs.map(d=>d.data());
     const a = document.querySelector(".screen.active");
     if(a && a.id==="screen-obras") renderObras();
+    if(a && a.id==="screen-dashboard") renderDashboard();
     if(obraActivaId){
       const o=getO();
       if(o){
@@ -1117,6 +1144,67 @@ function abrirObra(id){
 function getO(){return obras.find(o=>o.id===obraActivaId);}
 
 // ─── RENDER OBRAS ─────────────────────────────────
+
+function renderDashboard(){
+  const today = new Date().toDateString();
+  const activas = obras.filter(o=>o.estado==="activa").length;
+  const total = obras.length;
+  const updHoy = obras.reduce((s,o)=>{
+    return s + (o.updates||[]).filter(u=>new Date(u.ts).toDateString()===today).length;
+  },0);
+  document.getElementById("dash-activas").textContent = activas;
+  document.getElementById("dash-total").textContent = "de "+total+" total";
+  document.getElementById("dash-ver-todas-sub").textContent = activas+" obras activas";
+
+  // Proxima entrega
+  const conFecha = obras.filter(o=>o.fechaFin).sort((a,b)=>new Date(a.fechaFin)-new Date(b.fechaFin));
+  if(conFecha.length){
+    const prox = conFecha[0];
+    const dias = Math.ceil((new Date(prox.fechaFin)-new Date())/(1000*60*60*24));
+    const meses=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+    const d = new Date(prox.fechaFin);
+    document.getElementById("dash-prox-fecha").textContent = d.getDate()+" "+meses[d.getMonth()];
+    document.getElementById("dash-prox-dias").textContent = dias>0?dias+" días":"Hoy";
+    document.getElementById("dash-prox-dias").style.color = dias<=3?"#EF4444":dias<=7?"#F59E0B":"#10B981";
+  }
+
+  document.getElementById("dash-updates").textContent = updHoy;
+
+  // Entregas list
+  const entregasEl = document.getElementById("dash-entregas");
+  const colors = ["#1E6FD9","#10B981","#F59E0B","#EF4444"];
+  if(conFecha.length){
+    entregasEl.innerHTML = conFecha.slice(0,3).map((o,i)=>{
+      const dias = Math.ceil((new Date(o.fechaFin)-new Date())/(1000*60*60*24));
+      const col = dias<=3?"#EF4444":dias<=7?"#F59E0B":"#10B981";
+      const meses=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+      const d = new Date(o.fechaFin);
+      return `<div style="padding:10px 14px;border-bottom:${i<conFecha.slice(0,3).length-1?"1px solid #F0F3F8":"none"};display:flex;align-items:center;gap:10px;" onclick="abrirObra('${o.id}')">
+        <div style="width:3px;height:36px;background:${col};border-radius:2px;flex-shrink:0;"></div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;font-weight:600;color:#0B1F3A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${o.nombre}</div>
+          <div style="font-size:10px;color:#7090B8;margin-top:1px;">${o.cliente} · ${o.ubicacion||""}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-size:11px;font-weight:700;color:${col};">${d.getDate()} ${meses[d.getMonth()]}</div>
+          <div style="font-size:9px;color:#9BB5CF;">${dias>0?dias+" días":"Hoy"}</div>
+        </div>
+      </div>`;
+    }).join("");
+  } else {
+    entregasEl.innerHTML = '<div style="padding:14px;font-size:12px;color:#9BB5CF;">Sin fechas de entrega registradas</div>';
+  }
+
+  // Obra más reciente
+  if(obras.length){
+    const reciente = obras[0];
+    const card = document.getElementById("dash-reciente-card");
+    card.style.display = "flex";
+    document.getElementById("dash-reciente-nombre").textContent = reciente.nombre;
+    document.getElementById("dash-reciente-meta").textContent = (reciente.pct||0)+"% · "+(reciente.updates||[]).length+" updates · "+reciente.servicio;
+    document.getElementById("dash-reciente-btn").onclick = ()=>abrirObra(reciente.id);
+  }
+}
 function renderObras(){
   const el=document.getElementById("lista-obras");
   if(!obras.length){
@@ -1183,7 +1271,42 @@ function updateHoraCi(){
 }
 setInterval(()=>{ if(document.getElementById("ci-hora-display")) updateHoraCi(); },1000);
 
-async function registrarCheckin(){
+async function checkCheckinHoy(){
+  const hoy=new Date().toDateString();
+  if(localStorage.getItem("romsa_ci_hoy")===hoy) return;
+  const el=document.getElementById("ci-ob-hora");
+  if(el){
+    const tick=()=>{el.textContent=new Date().toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit",second:"2-digit"});setTimeout(tick,1000);};
+    tick();
+  }
+  const perfil=getPerfil();
+  const inp=document.getElementById("ci-ob-nombre");
+  if(inp&&perfil&&perfil.nombre) inp.value=perfil.nombre;
+  document.getElementById("modal-checkin-obligatorio").classList.add("open");
+}
+
+function registrarCheckinObligatorio(){
+  const nom=document.getElementById("ci-ob-nombre").value.trim();
+  if(!nom){showToast("⚠️ Tu nombre es requerido");return;}
+  const ubic=document.getElementById("ci-ob-ubic").value.trim();
+  const now=new Date();
+  localStorage.setItem("romsa_ci_hoy",now.toDateString());
+  localStorage.setItem("romsa_ci_nombre",nom);
+  savePerfil({nombre:nom,puesto:"",tel:""});
+  obras.forEach(async o=>{
+    if(o.estado==="activa"){
+      o.checkins=o.checkins||[];
+      o.checkins.unshift({id:Date.now(),nombre:nom,ubicacion:ubic,actividad:"Check-in inicio de jornada",fecha:now.toLocaleDateString("es-MX"),hora:now.toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"}),fechaISO:now.toISOString()});
+      await saveObra(o);
+    }
+  });
+  closeModal("modal-checkin-obligatorio");
+  const tb=document.getElementById("tb-tecnico-name");
+  if(tb) tb.textContent=nom;
+  showToast("✅ Check-in registrado — "+now.toLocaleTimeString("es-MX",{hour:"2-digit",minute:"2-digit"}));
+}
+
+function registrarCheckin(){
   const o=getO();if(!o)return;
   const nom=document.getElementById("ci-nombre").value.trim();
   const ubic=document.getElementById("ci-ubic").value.trim();
