@@ -404,18 +404,22 @@ html,body{height:100%;background:var(--off);color:var(--tx);font-family:var(--fo
     <!-- OBRA DETALLE -->
     <div id="screen-obra" class="screen">
       <div class="det-hdr">
-        <div class="det-back-row">
+             <div class="det-back-row">
           <div class="back-btn" onclick="goScreen('obras')">←</div>
-          <div>
+          <div style="flex:1;min-width:0;">
             <div class="det-name" id="det-nom">—</div>
             <div class="det-sub" id="det-sub">—</div>
           </div>
+          <button onclick="borrarObra()" title="Borrar obra" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:#EF4444;width:32px;height:32px;border-radius:8px;cursor:pointer;flex-shrink:0;font-size:14px;display:flex;align-items:center;justify-content:center;font-family:var(--font);">🗑</button>
         </div>
-        <div class="det-chips">
-          <span class="badge b-blue" id="det-svc">—</span>
-          <span class="badge b-green" id="det-est">Activa</span>
-          <span class="badge b-amber" id="det-pct">0%</span>
-          <span class="badge" id="det-owner" style="background:rgba(245,158,11,.1);color:#92600A;display:none;"></span>
+        <div class="det-chips" style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+          <div style="display:flex;gap:5px;flex-wrap:wrap;">
+            <span class="badge b-blue" id="det-svc">—</span>
+            <span class="badge b-green" id="det-est">Activa</span>
+            <span class="badge b-amber" id="det-pct">0%</span>
+            <span class="badge" id="det-owner" style="background:rgba(245,158,11,.1);color:#92600A;display:none;"></span>
+          </div>
+          <button onclick="borrarObra()" style="background:var(--red-dim);border:1px solid rgba(239,68,68,.2);color:var(--red);font-size:10px;font-weight:700;padding:4px 10px;border-radius:7px;cursor:pointer;font-family:var(--font);flex-shrink:0;">🗑 Borrar obra</button>
         </div>
       </div>
       <div class="det-tabs">
@@ -446,6 +450,7 @@ html,body{height:100%;background:var(--off);color:var(--tx);font-family:var(--fo
           <div class="card-hd"><span class="card-ttl">Última actualización</span></div>
           <div class="card-body" id="r-last-upd"><div style="font-size:12px;color:var(--g3);">Sin actualizaciones aún</div></div>
         </div>
+        <button class="btn btn-danger btn-block" onclick="borrarObra()" style="margin-top:4px;margin-bottom:20px;">🗑 Borrar esta obra</button>
       </div>
 
       <!-- CHECK-IN -->
@@ -540,8 +545,6 @@ html,body{height:100%;background:var(--off);color:var(--tx);font-family:var(--fo
         <div id="ba-pairs-obra"></div>
         <button class="btn btn-ghost btn-block btn-sm" onclick="addBaPairObra()">+ Agregar par antes/después</button>
         <div style="padding-bottom:20px;"></div>
-        <input type="file" id="ba-before-file" accept="image/*" style="display:none" onchange="handleBaObraFile(event,'before')">
-        <input type="file" id="ba-after-file" accept="image/*" style="display:none" onchange="handleBaObraFile(event,'after')">
       </div>
 
       <!-- REPORTE -->
@@ -655,7 +658,7 @@ html,body{height:100%;background:var(--off);color:var(--tx);font-family:var(--fo
         <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M11 4v14M4 11h14" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
     </div>
-    <button class="nb" onclick="previewCliente()">
+    <button class="nb" id="nb-cliente" onclick="clickClienteBtn()" style="opacity:.35;">
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M6 10s1.5-3 4-3 4 3 4 3-1.5 3-4 3-4-3-4-3z" stroke="currentColor" stroke-width="1.3"/><circle cx="10" cy="10" r="1.5" fill="currentColor"/></svg>
       Cliente
     </button>
@@ -890,12 +893,14 @@ const _fbCfg = {
 if(!firebase.apps.length) firebase.initializeApp(_fbCfg);
 const db = firebase.firestore();
 const obrasRef = db.collection("obras_seguimiento");
+function getBaPairsRef(obraId){ return obrasRef.doc(obraId).collection("baPairs"); }
 
 // ─── STATE ────────────────────────────────────────
 let obras = [];
 let obraActivaId = null;
 let updFotos = [];
 let notaFotosBuffer = [];
+let _savingBA = false;
 let baPendingId = null, baPendingSlot = null;
 let etapasInputCount = 0;
 
@@ -903,20 +908,49 @@ let etapasInputCount = 0;
 
 // ─── PHOTO COMPRESSION ───────────────────────────
 // Compress base64 image to max 400px, JPEG 60% → keeps docs under 1MB
+
+function forceJpeg(dataUrl, maxW, quality){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      try{
+        const ratio = Math.min(maxW/img.width, maxW/img.height, 1);
+        const w = Math.max(1, Math.round(img.width * ratio));
+        const h = Math.max(1, Math.round(img.height * ratio));
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        // White background for transparency
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        const result = canvas.toDataURL("image/jpeg", quality);
+        resolve(result);
+      }catch(e){ reject(e); }
+    };
+    img.onerror = (e)=>reject(new Error("No se pudo cargar la imagen"));
+    img.src = dataUrl;
+  });
+}
 function compressPhoto(base64, maxW=400, quality=0.55){
   return new Promise(resolve=>{
     const img = new Image();
     img.onload = ()=>{
-      const ratio = Math.min(maxW/img.width, maxW/img.height, 1);
-      const w = Math.round(img.width*ratio);
-      const h = Math.round(img.height*ratio);
-      const canvas = document.createElement("canvas");
-      canvas.width=w; canvas.height=h;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img,0,0,w,h);
-      resolve(canvas.toDataURL("image/jpeg", quality));
+      try{
+        const ratio = Math.min(maxW/img.width, maxW/img.height, 1);
+        const w = Math.max(1, Math.round(img.width*ratio));
+        const h = Math.max(1, Math.round(img.height*ratio));
+        const canvas = document.createElement("canvas");
+        canvas.width=w; canvas.height=h;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img,0,0,w,h);
+        const result = canvas.toDataURL("image/jpeg", quality);
+        resolve(result.length > 100 ? result : base64);
+      }catch(e){ resolve(base64); }
     };
     img.onerror = ()=>resolve(base64);
+    // iOS needs crossOrigin for some cases
+    img.crossOrigin = "anonymous";
     img.src = base64;
   });
 }
@@ -939,6 +973,7 @@ async function saveObra(o){
 
 function subscribeObras(){
   obrasRef.orderBy("ts","desc").onSnapshot(snap=>{
+    if(_savingBA) return;
     obras = snap.docs.map(d=>d.data());
     const a = document.querySelector(".screen.active");
     if(a && a.id==="screen-obras") renderObras();
@@ -970,7 +1005,13 @@ function goScreen(n){
   document.getElementById("nb-"+n)?.classList.add("active");
   document.getElementById("snav-"+n)?.classList.add("active");
   document.getElementById("fab").style.display = n==="obras"?"flex":"none";
-  if(n==="obras") renderObras();
+  if(n==="obras"){
+    obraActivaId=null;
+    if(_baPairsUnsub){ _baPairsUnsub(); _baPairsUnsub=null; }
+    _baPairs=[];
+    renderObras();
+    updateClienteBtn();
+  }
 }
 function showDTab(n,btn){
   document.querySelectorAll(".dtab-content").forEach(t=>t.style.display="none");
@@ -983,7 +1024,7 @@ function showDTab(n,btn){
   if(n==="checkin"&&o){ renderCheckins(o); updateHoraCi(); autoFillCheckin(); }
   if(n==="etapas"&&o) renderEtapasEditor(o);
   if(n==="updates"&&o){ renderUpdFeed(o); populateEtapaSelect(o); }
-  if(n==="ba"&&o) renderBaPairsObra(o);
+  if(n==="ba"&&o) renderBaPairsFromCache();
   if(n==="reporte"&&o) loadReporteForm(o);
   if(n==="materiales"&&o){ renderMateriales(o); populateMatEtapa(o); }
   if(n==="compartir"&&o) renderCompartir(o);
@@ -1069,6 +1110,8 @@ function abrirObra(id){
   document.getElementById("dtab-resumen").style.display="block";
   document.querySelectorAll(".dtab").forEach((b,i)=>b.classList.toggle("active",i===0));
   renderResumen(o);
+  updateClienteBtn();
+  loadBaPairs(o.id);
 
 }
 function getO(){return obras.find(o=>o.id===obraActivaId);}
@@ -1393,6 +1436,34 @@ function renderUpdFeed(o){
       ${u.tecnico?`<div class="upd-checkin">👤 ${u.tecnico}</div>`:''}
     </div>`).join("");
 }
+
+
+function clickClienteBtn(){
+  if(!obraActivaId){
+    showToast("⚠️ Selecciona una obra primero");
+    return;
+  }
+  previewCliente();
+}
+// Update cliente button state based on whether an obra is selected
+function updateClienteBtn(){
+  const btn = document.getElementById("nb-cliente");
+  if(!btn) return;
+  if(obraActivaId){ btn.style.opacity="1"; btn.title=""; }
+  else { btn.style.opacity=".35"; btn.title="Selecciona una obra primero"; }
+}
+async function borrarObra(){
+  const o=getO(); if(!o) return;
+  // Always require admin PIN to delete any obra
+  requireAdmin(async ()=>{
+    if(!confirm("¿Borrar la obra \""+o.nombre+"\"?\nEsta acción no se puede deshacer.")) return;
+    try{
+      await obrasRef.doc(o.id).delete();
+      showToast("🗑 Obra eliminada");
+      goScreen("obras");
+    }catch(e){ showToast("❌ Error: "+e.message); }
+  }, "PIN requerido para borrar obra");
+}
 async function delUpdate(id){
   const o=getO();if(!o)return;
   withEditPermission(o, async ()=>{
@@ -1411,15 +1482,18 @@ function delFotoUpdate(updId,fotoIdx){
 }
 
 // ─── ANTES/DESPUÉS ────────────────────────────────
-function addBaPairObra(){
+async function addBaPairObra(){
   const o=getO();if(!o)return;
-  const nom=prompt("Nombre del área:","Área "+((o.baPairs||[]).length+1));
+  const nom=prompt("Nombre del área:","Área "+(_baPairs.length+1));
   if(!nom)return;
-  o.baPairs=o.baPairs||[];
-  o.baPairs.push({id:Date.now(),nombre:nom,before:null,after:null});
-  saveObra(o);renderBaPairsObra(o);
+  const id=Date.now();
+  const pair={id:id,nombre:String(nom),obraId:String(o.id),before:"",after:""};
+  try{
+    await getBaPairsRef(o.id).doc(String(id)).set(pair);
+    showToast("✅ Área agregada");
+  }catch(e){ showToast("❌ Error: "+e.message); }
 }
-function renderBaPairsObra(o){
+function renderBaPairsFromCache(){
   const el=document.getElementById("ba-pairs-obra");
   o.baPairs=o.baPairs||[];
   if(!o.baPairs.length){el.innerHTML='<div style="font-size:12px;color:var(--g3);padding:6px 0 12px;">Sin pares aún</div>';return;}
@@ -1427,12 +1501,14 @@ function renderBaPairsObra(o){
     <div class="ba-pair">
       <div class="ba-hdr"><span style="font-size:13px;font-weight:600;">${pair.nombre}</span><button class="del-btn" onclick="delBaPairObra(${pair.id})">×</button></div>
       <div class="ba-grid">
-        <div class="ba-slot" onclick="selectBaObraSlot(${pair.id},'before')">
-          ${pair.before?`<img src="${pair.before}"><div class="ba-lbl before">ANTES</div>`:`<div class="ba-empty"><span style="font-size:22px;">📷</span><span>ANTES</span></div>`}
-        </div>
-        <div class="ba-slot" onclick="selectBaObraSlot(${pair.id},'after')">
-          ${pair.after?`<img src="${pair.after}"><div class="ba-lbl after">DESPUÉS</div>`:`<div class="ba-empty"><span style="font-size:22px;">📷</span><span>DESPUÉS</span></div>`}
-        </div>
+        <label style="position:relative;cursor:pointer;display:block;">
+          <input type="file" accept="image/*" capture="environment" style="position:absolute;inset:0;opacity:0;cursor:pointer;z-index:2;width:100%;height:100%;" onchange="handleBaFile(event,${pair.id},'before')">
+          ${pair.before?`<img src="${pair.before}" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block;border-radius:0;"><div class="ba-lbl before">ANTES</div>`:`<div class="ba-empty"><span style="font-size:22px;">📷</span><span>ANTES</span></div>`}
+        </label>
+        <label style="position:relative;cursor:pointer;display:block;">
+          <input type="file" accept="image/*" capture="environment" style="position:absolute;inset:0;opacity:0;cursor:pointer;z-index:2;width:100%;height:100%;" onchange="handleBaFile(event,${pair.id},'after')">
+          ${pair.after?`<img src="${pair.after}" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block;border-radius:0;"><div class="ba-lbl after">DESPUÉS</div>`:`<div class="ba-empty"><span style="font-size:22px;">📷</span><span>DESPUÉS</span></div>`}
+        </label>
       </div>
     </div>`).join("");
 }
@@ -1440,14 +1516,80 @@ function selectBaObraSlot(pid,slot){
   baPendingId=pid;baPendingSlot=slot;
   document.getElementById(slot==="before"?"ba-before-file":"ba-after-file").click();
 }
-function handleBaObraFile(e,slot){
-  const o=getO();if(!o||!baPendingId)return;
-  const f=e.target.files[0];if(!f)return;
-  const r=new FileReader();
-  r.onload=ev=>{const pair=o.baPairs.find(x=>x.id===baPendingId);if(pair){pair[slot]=ev.target.result;saveObra(o);renderBaPairsObra(o);}};
-  r.readAsDataURL(f);e.target.value="";
+
+async function handleBaFile(e, pairId, slot){
+  const f = e.target.files && e.target.files[0];
+  if(!f) return;
+  const capturedObraId = obraActivaId;
+  showToast("⏳ Procesando foto...");
+  try{
+    // Force convert to JPEG via canvas regardless of source format (HEIC, PNG, etc)
+    const dataUrl = await readFileAsDataURL(f);
+    const jpeg = await forceJpeg(dataUrl, 500, 0.6);
+    // Only store the pure base64 data after the comma — avoids header issues
+    const b64 = jpeg.split(",")[1];
+    if(!b64 || b64.length < 100){ showToast("⚠️ Error procesando imagen"); return; }
+    const pairIdx = _baPairs.findIndex(x=>x.id===pairId);
+    if(pairIdx<0){ showToast("⚠️ Par no encontrado"); return; }
+    const pair = _baPairs[pairIdx];
+    // Use update() with only the changed field — avoids rewriting the whole doc
+    const updateData = {};
+    updateData[slot] = b64;
+    await getBaPairsRef(capturedObraId).doc(String(pairId)).update(updateData);
+    pair[slot] = jpeg; // keep full data URL in local cache for display
+    renderBaPairsFromCache();
+    showToast("✅ Foto guardada");
+  }catch(err){
+    console.error("BA error:", err);
+    showToast("❌ " + err.message);
+  }
 }
-function delBaPairObra(id){const o=getO();if(!o)return;o.baPairs=o.baPairs.filter(x=>x.id!==id);saveObra(o);renderBaPairsObra(o);}
+function readFileAsDataURL(file){
+  return new Promise((resolve,reject)=>{
+    const r=new FileReader();
+    r.onload=e=>resolve(e.target.result);
+    r.onerror=e=>reject(e);
+    r.readAsDataURL(file);
+  });
+}
+
+async function handleBaObraFile(e,slot){
+  const files=e.target.files;
+  if(!files||!files.length)return;
+  const f=files[0];
+  const capturedId=baPendingId;
+  const capturedObraId=obraActivaId;
+  baPendingId=null;
+  e.target.value="";
+  if(!capturedId||!capturedObraId)return;
+  showToast("⏳ Procesando foto...");
+  try{
+    // Read file completely using Promise
+    const dataUrl=await readFileAsDataURL(f);
+    // Compress
+    const compressed=await compressPhoto(dataUrl,800,0.7);
+    // Get fresh obra reference
+    const freshO=obras.find(x=>x.id===capturedObraId);
+    if(!freshO){showToast("⚠️ Error: obra no encontrada");return;}
+    const pair=freshO.baPairs.find(x=>x.id===capturedId);
+    if(!pair){showToast("⚠️ Error: par no encontrado");return;}
+    pair[slot]=compressed;
+    await saveObra(freshO);
+    renderBaPairsFromCache();
+    showToast("✅ Foto guardada correctamente");
+  }catch(err){
+    console.error("BA foto error:",err);
+    showToast("❌ Error al guardar foto: "+err.message);
+  }
+}
+async function delBaPairObra(id){
+  const o=getO();if(!o)return;
+  try{
+    await getBaPairsRef(o.id).doc(String(id)).delete();
+    showToast("🗑 Par eliminado");
+    loadBaPairs(o.id);
+  }catch(e){ showToast("❌ Error: "+e.message); }
+}
 
 // ─── REPORTE FORM ─────────────────────────────────
 function loadReporteForm(o){
@@ -1596,7 +1738,7 @@ function mostrarVC(o){
   }
 
   // Antes/Después
-  const baPairs=(o.baPairs||[]).filter(x=>x.before||x.after);
+  const baPairs=_baPairs.filter(x=>(x.before&&x.before.length>100)||(x.after&&x.after.length>100));
   const baSec=document.getElementById("vc-ba-section");
   if(baPairs.length){
     baSec.style.display="block";
@@ -1604,8 +1746,8 @@ function mostrarVC(o){
       <div style="margin-bottom:14px;">
         <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">${pair.nombre}</div>
         <div class="vc-ba-grid">
-          ${pair.before?`<div class="vc-ba-slot"><img src="${pair.before}" onclick="verImg('${pair.before}')"><div class="vc-ba-lbl vc-ba-before">ANTES</div></div>`:`<div class="vc-ba-empty">Sin foto</div>`}
-          ${pair.after?`<div class="vc-ba-slot"><img src="${pair.after}" onclick="verImg('${pair.after}')"><div class="vc-ba-lbl vc-ba-after">DESPUÉS</div></div>`:`<div class="vc-ba-empty">Sin foto</div>`}
+          ${pair.before&&pair.before.length>100?`<div class="vc-ba-slot"><img src="${pair.before.startsWith('data:')?pair.before:'data:image/jpeg;base64,'+pair.before}" onclick="verImg(this.src)"><div class="vc-ba-lbl vc-ba-before">ANTES</div></div>`:`<div class="vc-ba-empty">Sin foto</div>`}
+          ${pair.after&&pair.after.length>100?`<div class="vc-ba-slot"><img src="${pair.after.startsWith('data:')?pair.after:'data:image/jpeg;base64,'+pair.after}" onclick="verImg(this.src)"><div class="vc-ba-lbl vc-ba-after">DESPUÉS</div></div>`:`<div class="vc-ba-empty">Sin foto</div>`}
         </div>
       </div>`).join("");
   } else { baSec.style.display="none"; }
@@ -1625,7 +1767,7 @@ function showPdfPreview(){
   const rep=o.reporte||{};
   const updates=(o.updates||[]).sort((a,b)=>a.ts-b.ts);
   const etapas=o.etapas||[];
-  const baPairs=(o.baPairs||[]).filter(x=>x.before||x.after);
+  const baPairs=_baPairs.filter(x=>(x.before&&x.before.length>100)||(x.after&&x.after.length>100));
   const logoSrc=document.getElementById("tb-logo-img").src;
 
   const etapasHtml=etapas.map(e=>`
@@ -1646,8 +1788,8 @@ function showPdfPreview(){
     <div style="margin-bottom:12px;">
       <div style="font-size:11px;font-weight:700;color:var(--navy);margin-bottom:6px;">${pair.nombre}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-        ${pair.before?`<div style="position:relative;"><img src="${pair.before}" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px;"><div style="position:absolute;top:5px;left:5px;background:rgba(239,68,68,.9);color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;">ANTES</div></div>`:''}
-        ${pair.after?`<div style="position:relative;"><img src="${pair.after}" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px;"><div style="position:absolute;top:5px;left:5px;background:rgba(16,185,129,.9);color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;">DESPUÉS</div></div>`:''}
+        ${pair.before&&pair.before.length>100?`<div style="position:relative;"><img src="${pair.before.startsWith('data:')?pair.before:'data:image/jpeg;base64,'+pair.before}" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px;"><div style="position:absolute;top:5px;left:5px;background:rgba(239,68,68,.9);color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;">ANTES</div></div>`:''}
+        ${pair.after&&pair.after.length>100?`<div style="position:relative;"><img src="${pair.after.startsWith('data:')?pair.after:'data:image/jpeg;base64,'+pair.after}" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px;"><div style="position:absolute;top:5px;left:5px;background:rgba(16,185,129,.9);color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;">DESPUÉS</div></div>`:''}
       </div>
     </div>`).join("");
 
@@ -1721,7 +1863,7 @@ function checkUrlParams(){
 
   let lastTs = 0;
 
-  // Load and subscribe to obra — single subscription, no complexity
+  // Load obra
   obrasRef.doc(obraId).onSnapshot(snap=>{
     if(!snap.exists){
       document.getElementById("vista-cliente").innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#fff;font-size:16px;text-align:center;padding:24px;">Obra no encontrada.</div>';
@@ -1729,11 +1871,14 @@ function checkUrlParams(){
     }
     const o=snap.data();
     obras=[o]; obraActivaId=obraId;
+    // Load baPairs from subcollection
+    getBaPairsRef(obraId).orderBy("id","asc").onSnapshot(bpSnap=>{
+      _baPairs = bpSnap.docs.map(d=>d.data());
+      o.baPairs = _baPairs;
+      mostrarVC(o);
+    });
     mostrarVC(o);
-  }, err=>{
-    console.error(err);
-    showToast("⚠️ Error de conexión");
-  });
+  }, err=>{ console.error(err); });
 }
 
 // ─── UTILS ───────────────────────────────────────
@@ -1933,6 +2078,44 @@ async function delMaterial(id){
     await saveObra(o);renderMateriales(o);
   });
 }
+
+// ─── BA PAIRS SUBCOLLECTION ───────────────────────
+let _baPairs = []; // local cache for current obra's baPairs
+let _baPairsUnsub = null;
+
+function subscribeBaPairs(obraId){
+  if(_baPairsUnsub){ _baPairsUnsub(); _baPairsUnsub=null; }
+  _baPairsUnsub = getBaPairsRef(obraId).orderBy("id","asc").onSnapshot(snap=>{
+    _baPairs = snap.docs.map(d=>d.data());
+    const tab = document.getElementById("dtab-ba");
+    if(tab && tab.style.display!=="none") renderBaPairsFromCache();
+  }, err=>console.error("baPairs snapshot err:",err));
+}
+
+function loadBaPairs(obraId){
+  subscribeBaPairs(obraId);
+}
+
+function renderBaPairsFromCache(){
+  const el=document.getElementById("ba-pairs-obra");
+  if(!el)return;
+  if(!_baPairs.length){el.innerHTML='<div style="font-size:12px;color:var(--g3);padding:6px 0 12px;">Sin pares aún</div>';return;}
+  el.innerHTML=_baPairs.map(pair=>`
+    <div class="ba-pair">
+      <div class="ba-hdr"><span style="font-size:13px;font-weight:600;">${pair.nombre}</span><button class="del-btn" onclick="delBaPairObra(${pair.id})">×</button></div>
+      <div class="ba-grid">
+        <label style="position:relative;cursor:pointer;display:block;">
+          <input type="file" accept="image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer;z-index:2;width:100%;height:100%;" onchange="handleBaFile(event,${pair.id},'before')">
+          ${pair.before&&pair.before.length>100?`<img src="${pair.before.startsWith('data:')?pair.before:'data:image/jpeg;base64,'+pair.before}" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block;"><div class="ba-lbl before">ANTES</div>`:`<div class="ba-empty"><span style="font-size:22px;">📷</span><span>ANTES</span></div>`}
+        </label>
+        <label style="position:relative;cursor:pointer;display:block;">
+          <input type="file" accept="image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer;z-index:2;width:100%;height:100%;" onchange="handleBaFile(event,${pair.id},'after')">
+          ${pair.after&&pair.after.length>100?`<img src="${pair.after.startsWith('data:')?pair.after:'data:image/jpeg;base64,'+pair.after}" style="width:100%;aspect-ratio:4/3;object-fit:cover;display:block;"><div class="ba-lbl after">DESPUÉS</div>`:`<div class="ba-empty"><span style="font-size:22px;">📷</span><span>DESPUÉS</span></div>`}
+        </label>
+      </div>
+    </div>`).join("");
+}
+
 // ─── PERFIL TÉCNICO ───────────────────────────────
 function getPerfil(){ try{const d=localStorage.getItem("romsa_perfil");return d?JSON.parse(d):null;}catch(e){return null;} }
 function savePerfil(p){ try{localStorage.setItem("romsa_perfil",JSON.stringify(p));}catch(e){} }
