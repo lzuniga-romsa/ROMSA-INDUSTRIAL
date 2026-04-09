@@ -721,6 +721,10 @@ html,body{height:100%;background:var(--off);color:var(--tx);font-family:var(--fo
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 10L10 3l7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M5 8.5V17h4v-4h2v4h4V8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       Inicio
     </button>
+    <button class="nb" id="nb-obras" onclick="goScreen('obras')">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="11" y="3" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="3" y="11" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="11" y="11" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/></svg>
+      Obras
+    </button>
     <div class="nb-fab-wrap">
       <button class="nb-fab" onclick="showNueva()">
         <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M11 4v14M4 11h14" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
@@ -1097,7 +1101,7 @@ function goScreen(n){
   document.getElementById("screen-"+n).classList.add("active");
   document.getElementById("nb-"+n)?.classList.add("active");
   document.getElementById("snav-"+n)?.classList.add("active");
-  document.getElementById("fab").style.display = n==="obras"?"flex":"none";
+  document.getElementById("fab").style.display=(n==="obras"||n==="dashboard")?"flex":"none";
   if(n==="obras"){
     obraActivaId=null;
     if(_baPairsUnsub){ _baPairsUnsub(); _baPairsUnsub=null; }
